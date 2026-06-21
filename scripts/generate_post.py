@@ -63,19 +63,19 @@ def _build_context(data: dict) -> str:
         ]
         parts.append("### Notícias recentes (RSS):\n" + "\n".join(lines))
 
-    if data.get("ebay_sold"):
+    if data.get("ebay_listings"):
         lines = [
-            f"- {l['title']}: vendido por US$ {l['sold_usd']:,.0f} ({l['condition']}) em {l['end_date'][:10]}"
-            for l in data["ebay_sold"][:6]
+            f"- {l['title']}: US$ {l['price_usd']:,.0f} ({l['condition']}) — {l['buying']}"
+            for l in data["ebay_listings"][:6]
         ]
-        parts.append("### Vendas recentes no eBay (leilões concluídos):\n" + "\n".join(lines))
+        parts.append("### Mercado ativo eBay (cards de alto valor em circulação):\n" + "\n".join(lines))
 
-    if data.get("heritage_results"):
+    if data.get("auction_news"):
         lines = [
-            f"- {h['title']} — {h['summary'][:250]}"
-            for h in data["heritage_results"][:4]
+            f"- [{n['source']}] {n['title']} ({n['date'][:16]})"
+            for n in data["auction_news"][:4]
         ]
-        parts.append("### Resultados Heritage Auctions:\n" + "\n".join(lines))
+        parts.append("### Notícias de leilões e vendas (Google News):\n" + "\n".join(lines))
 
     if data.get("recent_sets"):
         lines = [

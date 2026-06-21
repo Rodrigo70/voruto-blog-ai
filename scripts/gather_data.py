@@ -1,9 +1,11 @@
 """
 Coleta dados externos para embasar os artigos do blog Voruto.
-Fontes: RSS feeds, eBay Finding API (sold listings), Heritage Auctions RSS, PokémonTCG.io
+Fontes: RSS feeds, eBay Browse API (OAuth), PWCC Marketplace, PokémonTCG.io
 """
 import os
 import re
+import time
+import base64
 import requests
 import feedparser
 
@@ -16,14 +18,154 @@ RSS_FEEDS = [
     {"url": "https://highsnobiety.com/rss",                         "name": "Highsnobiety"},
 ]
 
-# URL do feed RSS de resultados realizados da Heritage Auctions.
-# Categoria 2601 = Trading Cards. Ajuste o ID se necessário.
-# Referência: https://www.ha.com/rss/auctions.zx
-HERITAGE_RSS_URL = os.environ.get(
-    "HERITAGE_RSS_URL",
-    "https://www.ha.com/rss/auctions.zx?category=2601&type=realized",
-)
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
+# Cache do token eBay OAuth (válido por 2h)
+_ebay_token_cache: dict = {"token": None, "expires_at": 0.0}
+
+
+# ── eBay Browse API (OAuth) ───────────────────────────────────────────────────
+
+def _get_ebay_oauth_token() -> str:
+    if _ebay_token_cache["token"] and time.time() < _ebay_token_cache["expires_at"]:
+        return _ebay_token_cache["token"]
+
+    app_id  = os.environ["EBAY_APP_ID"]
+    cert_id = os.environ["EBAY_CERT_ID"]
+    credentials = base64.b64encode(f"{app_id}:{cert_id}".encode()).decode()
+
+    resp = requests.post(
+        "https://api.ebay.com/identity/v1/oauth2/token",
+        headers={
+            "Authorization":  f"Basic {credentials}",
+            "Content-Type":   "application/x-www-form-urlencoded",
+        },
+        data="grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    _ebay_token_cache["token"]      = data["access_token"]
+    _ebay_token_cache["expires_at"] = time.time() + data.get("expires_in", 7200) - 60
+    return _ebay_token_cache["token"]
+
+
+def gather_ebay_listings(topic: dict, max_items: int = 8) -> list[dict]:
+    """
+    Busca listagens de alto valor no eBay via Browse API (OAuth).
+    Mostra o mercado ativo de cards raros — preços reais em circulação.
+    """
+    if not os.environ.get("EBAY_APP_ID") or not os.environ.get("EBAY_CERT_ID"):
+        print("[eBay] EBAY_APP_ID ou EBAY_CERT_ID não configurado, pulando.")
+        return []
+
+    try:
+        token = _get_ebay_oauth_token()
+        resp  = requests.get(
+            "https://api.ebay.com/buy/browse/v1/item_summary/search",
+            headers={
+                "Authorization":           f"Bearer {token}",
+                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+                "Content-Type":            "application/json",
+            },
+            params={
+                "q":     topic.get("ebay_query", "pokemon card PSA 10 rare"),
+                "sort":  "-price",
+                "limit": str(max_items),
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("itemSummaries", [])
+
+        results = []
+        for item in items:
+            price = item.get("price", {})
+            results.append({
+                "title":     item.get("title", ""),
+                "price_usd": float(price.get("value", 0)),
+                "condition": item.get("condition", ""),
+                "url":       item.get("itemWebUrl", ""),
+                "buying":    ", ".join(item.get("buyingOptions", [])),
+            })
+
+        print(f"[eBay] {len(results)} listagens encontradas.")
+        return results
+
+    except Exception as e:
+        print(f"[eBay] Erro: {e}")
+        return []
+
+
+# ── Google News RSS ───────────────────────────────────────────────────────────
+
+def gather_auction_news(query: str = "pokemon card sold auction PSA graded", max_items: int = 6) -> list[dict]:
+    """
+    Busca notícias de leilões e vendas de cards via Google News RSS.
+    Sem autenticação, sempre atualizado, cobre Heritage, PWCC, eBay e outros.
+    """
+    import urllib.parse
+    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-US&gl=US&ceid=US:en"
+
+    try:
+        feed = feedparser.parse(url)
+        results = []
+        for entry in feed.entries[:max_items]:
+            clean = re.sub(r"<[^>]+>", "", entry.get("summary", ""))[:400]
+            results.append({
+                "title":   entry.get("title", ""),
+                "summary": clean,
+                "url":     entry.get("link", ""),
+                "date":    entry.get("published", ""),
+                "source":  entry.get("source", {}).get("title", "Google News"),
+            })
+        print(f"[Google News] {len(results)} notícias para '{query}'")
+        return results
+    except Exception as e:
+        print(f"[Google News] Erro: {e}")
+        return []
+
+
+# ── PokémonTCG.io ─────────────────────────────────────────────────────────────
+
+def gather_pokemon_sets() -> list[dict]:
+    """Busca os sets mais recentes via PokémonTCG.io (API key opcional)."""
+    headers = {}
+    api_key = os.environ.get("POKEMON_TCG_API_KEY", "")
+    if api_key:
+        headers["X-Api-Key"] = api_key
+
+    try:
+        resp = requests.get(
+            "https://api.pokemontcg.io/v2/sets",
+            headers=headers,
+            params={"orderBy": "-releaseDate", "pageSize": "6"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return [
+            {
+                "name":        s.get("name"),
+                "series":      s.get("series"),
+                "total":       s.get("total"),
+                "releaseDate": s.get("releaseDate"),
+            }
+            for s in resp.json().get("data", [])
+        ]
+    except Exception as e:
+        print(f"[PokémonTCG.io] Erro: {e}")
+        return []
+
+
+# ── RSS Feeds ─────────────────────────────────────────────────────────────────
 
 def gather_rss_news(topic: dict, max_items: int = 10) -> list[dict]:
     """Filtra artigos relevantes dos RSS feeds com base nas keywords do tema."""
@@ -60,126 +202,7 @@ def gather_rss_news(topic: dict, max_items: int = 10) -> list[dict]:
     return unique[:max_items]
 
 
-def gather_ebay_sold(topic: dict, max_items: int = 8) -> list[dict]:
-    """
-    Busca leilões CONCLUÍDOS (vendidos) no eBay via Finding API — findCompletedItems.
-    Retorna apenas itens que efetivamente foram vendidos (EndedWithSales).
-    """
-    app_id = os.environ.get("EBAY_APP_ID", "")
-    if not app_id:
-        print("[eBay] EBAY_APP_ID não configurado, pulando.")
-        return []
-
-    try:
-        resp = requests.get(
-            "https://svcs.ebay.com/services/search/FindingService/v1",
-            params={
-                "OPERATION-NAME":                    "findCompletedItems",
-                "SERVICE-VERSION":                   "1.0.0",
-                "SECURITY-APPNAME":                  app_id,
-                "RESPONSE-DATA-FORMAT":              "JSON",
-                "keywords":                          topic.get("ebay_query", "pokemon card PSA 10 rare"),
-                "categoryId":                        "183050",
-                "itemFilter(0).name":                "SoldItemsOnly",
-                "itemFilter(0).value":               "true",
-                "sortOrder":                         "PricePlusShippingHighest",
-                "paginationInput.entriesPerPage":    str(max_items),
-            },
-            timeout=12,
-        )
-        resp.raise_for_status()
-        items = (
-            resp.json()
-            .get("findCompletedItemsResponse", [{}])[0]
-            .get("searchResult", [{}])[0]
-            .get("item", [])
-        )
-        results = []
-        for item in items:
-            selling_state = (
-                item.get("sellingStatus", [{}])[0]
-                    .get("sellingState", [""])[0]
-            )
-            if selling_state != "EndedWithSales":
-                continue
-            sold_price = float(
-                item.get("sellingStatus", [{}])[0]
-                    .get("currentPrice", [{}])[0]
-                    .get("__value__", "0")
-            )
-            results.append({
-                "title":       item.get("title", [""])[0],
-                "sold_usd":    sold_price,
-                "url":         item.get("viewItemURL", [""])[0],
-                "condition":   (
-                    item.get("condition", [{}])[0]
-                        .get("conditionDisplayName", [""])[0]
-                ),
-                "end_date":    (
-                    item.get("listingInfo", [{}])[0]
-                        .get("endTime", [""])[0]
-                ),
-            })
-        return results
-    except Exception as e:
-        print(f"[eBay] Erro: {e}")
-        return []
-
-
-def gather_heritage_results(max_items: int = 6) -> list[dict]:
-    """
-    Coleta resultados realizados de leilões da Heritage Auctions via RSS.
-    Categoria 2601 = Trading Cards (Pokémon, MTG, etc.).
-    """
-    try:
-        feed = feedparser.parse(HERITAGE_RSS_URL)
-        if not feed.entries:
-            print(f"[Heritage] Feed sem entradas: {HERITAGE_RSS_URL}")
-            return []
-
-        results = []
-        for entry in feed.entries[:max_items]:
-            clean_summary = re.sub(r"<[^>]+>", "", entry.get("summary", ""))[:500]
-            results.append({
-                "title":   entry.get("title", ""),
-                "summary": clean_summary,
-                "url":     entry.get("link", ""),
-                "date":    entry.get("published", ""),
-            })
-        return results
-    except Exception as e:
-        print(f"[Heritage] Erro: {e}")
-        return []
-
-
-def gather_pokemon_sets() -> list[dict]:
-    """Busca os sets mais recentes via PokémonTCG.io (API key opcional)."""
-    headers = {}
-    api_key = os.environ.get("POKEMON_TCG_API_KEY", "")
-    if api_key:
-        headers["X-Api-Key"] = api_key
-
-    try:
-        resp = requests.get(
-            "https://api.pokemontcg.io/v2/sets",
-            headers=headers,
-            params={"orderBy": "-releaseDate", "pageSize": "6"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return [
-            {
-                "name":        s.get("name"),
-                "series":      s.get("series"),
-                "total":       s.get("total"),
-                "releaseDate": s.get("releaseDate"),
-            }
-            for s in resp.json().get("data", [])
-        ]
-    except Exception as e:
-        print(f"[PokémonTCG.io] Erro: {e}")
-        return []
-
+# ── Orquestrador ──────────────────────────────────────────────────────────────
 
 def gather_all(topic: dict) -> dict:
     print(f"[gather] Coletando dados para: {topic['name']}")
@@ -188,13 +211,15 @@ def gather_all(topic: dict) -> dict:
     if topic["slug"] in ("lancamentos-tcg", "mercado-global", "curiosidades-raridades"):
         sets = gather_pokemon_sets()
 
-    heritage = []
+    auction_news = []
     if topic["slug"] in ("leiloes-mercado", "curiosidades-raridades", "mercado-global"):
-        heritage = gather_heritage_results()
+        auction_news = gather_auction_news(
+            query=f"pokemon card sold auction PSA {topic.get('slug', '')}"
+        )
 
     return {
-        "rss_articles":       gather_rss_news(topic),
-        "ebay_sold":          gather_ebay_sold(topic),
-        "heritage_results":   heritage,
-        "recent_sets":        sets,
+        "rss_articles":  gather_rss_news(topic),
+        "ebay_listings": gather_ebay_listings(topic),
+        "auction_news":  auction_news,
+        "recent_sets":   sets,
     }
