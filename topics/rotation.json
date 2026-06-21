@@ -1,0 +1,52 @@
+{
+  "categories": [
+    {
+      "slug": "lancamentos-tcg",
+      "name": "Lançamentos TCG",
+      "description": "Novos sets e lançamentos de cards Pokémon, One Piece, Magic: The Gathering e outros TCGs",
+      "keywords": ["pokemon tcg novo set", "lançamento cards", "booster box novo", "pokemon scarlet violet", "pokemon tcg 2025"],
+      "wp_category": "Lançamentos TCG",
+      "ebay_query": "pokemon booster box 2025 sealed new release"
+    },
+    {
+      "slug": "leiloes-mercado",
+      "name": "Leilões & Mercado",
+      "description": "Resultados de leilões internacionais e análise de preços de cards raros",
+      "keywords": ["pokemon card auction", "PSA 10 charizard", "heritage auctions pokemon", "PWCC marketplace", "pokemon sold record"],
+      "wp_category": "Leilões & Mercado",
+      "ebay_query": "pokemon card PSA 10 graded charizard rare vintage"
+    },
+    {
+      "slug": "collabs-cultura",
+      "name": "Collabs & Cultura Geek",
+      "description": "Colaborações entre marcas mundiais e o universo geek, Pokémon com fashion, arte e cultura pop",
+      "keywords": ["pokemon collab", "geek brand collaboration", "pokemon streetwear", "pokemon art", "pokemon limited"],
+      "wp_category": "Collabs & Cultura",
+      "ebay_query": "pokemon collaboration limited edition fashion streetwear"
+    },
+    {
+      "slug": "guia-colecionador",
+      "name": "Guia do Colecionador",
+      "description": "Dicas práticas sobre como colecionar, gradear, armazenar e investir em cards TCG",
+      "keywords": ["como gradear card pokemon", "PSA grading", "investir em cards", "armazenar cards", "portfolio colecionismo"],
+      "wp_category": "Guia do Colecionador",
+      "ebay_query": "pokemon card PSA graded collection storage supplies binder"
+    },
+    {
+      "slug": "curiosidades-raridades",
+      "name": "Curiosidades & Raridades",
+      "description": "Cards mais raros do mundo, recordes de preços, histórias únicas do universo do colecionismo",
+      "keywords": ["card mais raro pokemon", "pikachu illustrator", "trophy card", "error card pokemon", "misprint"],
+      "wp_category": "Curiosidades & Raridades",
+      "ebay_query": "pokemon trophy card pikachu illustrator rare error misprint vintage"
+    },
+    {
+      "slug": "mercado-global",
+      "name": "Mercado Global de Colecionismo",
+      "description": "O crescimento do mercado geek global, TCG como classe de ativo, tendências mundiais de colecionismo",
+      "keywords": ["mercado colecionismo geek", "tcg investimento", "pokemon market growth", "card game industry", "collectibles market"],
+      "wp_category": "Mercado Global",
+      "ebay_query": "pokemon card investment graded market collectible alternative asset"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+name: Voruto Blog AI — Gerador de Posts
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'   # Segunda-feira 12:00 UTC = 09:00 BRT
+    - cron: '0 12 * * 4'   # Quinta-feira  12:00 UTC = 09:00 BRT
+  workflow_dispatch:
+    inputs:
+      topic_override:
+        description: 'Forçar tema pelo slug (ex: leiloes-mercado). Deixe vazio para rotação automática.'
+        required: false
+        default: ''
+
+# Configurações públicas — segredos vão em Settings → Secrets and variables → Actions
+env:
+  SANITY_PROJECT_ID: cuj6jfyx
+  SANITY_DATASET:    production
+  WP_URL:            https://voruto.com.br
+  WP_USER:           voruto-blog-bot
+
+jobs:
+  generate-and-publish:
+    name: Gerar e publicar post
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Gerar e publicar artigo
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SANITY_API_TOKEN:  ${{ secrets.SANITY_API_TOKEN }}
+          WP_APP_PASSWORD:   ${{ secrets.WP_APP_PASSWORD }}
+          EBAY_APP_ID:            ${{ secrets.EBAY_APP_ID }}
+          POKEMON_TCG_API_KEY:    ${{ secrets.POKEMON_TCG_API_KEY }}
+          HERITAGE_RSS_URL:       ${{ secrets.HERITAGE_RSS_URL }}
+          TOPIC_OVERRIDE:         ${{ github.event.inputs.topic_override }}
+        run: python scripts/generate_post.py
