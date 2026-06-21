@@ -64,13 +64,32 @@ def _get_or_create_term(endpoint: str, name: str) -> int:
     return create.json()["id"]
 
 
+def _update_post_meta(post_id: int, meta: dict) -> None:
+    """Salva metadados customizados via WP REST API (requer plugin ou suporte a custom meta)."""
+    import json as _json
+    for key, value in meta.items():
+        requests.post(
+            f"{WP_URL}/wp-json/wp/v2/posts/{post_id}",
+            headers=_HEADERS_JSON,
+            json={"meta": {key: value}},
+            timeout=10,
+        )
+
+
 def publish(topic: dict, article: dict, slug: str) -> dict:
     """
     Cria um post publicado no WordPress.
     Retorna {"id": int, "url": str}.
     """
+    import json as _json
     cat_id  = _get_or_create_term("categories", topic["wp_category"])
     tag_ids = [_get_or_create_term("tags", tag) for tag in article.get("tags", [])]
+
+    # Tempo de leitura (~200 palavras/min)
+    word_count   = len(article.get("content_html", "").split())
+    reading_time = max(1, round(word_count / 200))
+
+    sources_used = article.get("_sources_used", [])
 
     resp = requests.post(
         f"{WP_URL}/wp-json/wp/v2/posts",
@@ -83,11 +102,16 @@ def publish(topic: dict, article: dict, slug: str) -> dict:
             "slug":       slug,
             "categories": [cat_id],
             "tags":       tag_ids,
+            "meta": {
+                "_voruto_reading_time": str(reading_time),
+                "_voruto_sources":      _json.dumps(sources_used, ensure_ascii=False),
+            },
         },
-        timeout=20,
+        timeout=30,
     )
     resp.raise_for_status()
     data = resp.json()
     url  = data.get("link", "")
     print(f"[WordPress] Post {data['id']} publicado: {url}")
+    print(f"[WordPress] Tempo de leitura: {reading_time} min | Fontes: {sources_used}")
     return {"id": data["id"], "url": url}
