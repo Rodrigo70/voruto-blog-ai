@@ -10,8 +10,19 @@ WP_USER         = os.environ.get("WP_USER", "voruto-blog-bot")
 WP_APP_PASSWORD = os.environ["WP_APP_PASSWORD"]
 
 _AUTH = "Basic " + base64.b64encode(f"{WP_USER}:{WP_APP_PASSWORD}".encode()).decode()
-_HEADERS_JSON = {"Authorization": _AUTH, "Content-Type": "application/json"}
-_HEADERS_GET  = {"Authorization": _AUTH}
+_UA   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+_HEADERS_JSON = {
+    "Authorization": _AUTH,
+    "Content-Type":  "application/json",
+    "User-Agent":    _UA,
+    "Accept":        "application/json",
+}
+_HEADERS_GET = {
+    "Authorization": _AUTH,
+    "User-Agent":    _UA,
+    "Accept":        "application/json",
+}
 
 
 def _get_or_create_term(endpoint: str, name: str) -> int:
@@ -22,6 +33,17 @@ def _get_or_create_term(endpoint: str, name: str) -> int:
         params={"search": name, "per_page": 5},
         timeout=10,
     )
+    if not resp.text.strip():
+        raise RuntimeError(
+            f"[WordPress] GET /{endpoint} retornou resposta vazia "
+            f"(HTTP {resp.status_code}). "
+            f"Verifique se a REST API está habilitada e se WP_APP_PASSWORD está correto. "
+            f"URL testada: {WP_URL}/wp-json/wp/v2/{endpoint}"
+        )
+    if not resp.ok:
+        raise RuntimeError(
+            f"[WordPress] GET /{endpoint} HTTP {resp.status_code}: {resp.text[:300]}"
+        )
     items = resp.json()
     if isinstance(items, list) and items:
         # Busca correspondência exata por nome

@@ -29,15 +29,22 @@ _ROOT   = Path(__file__).parent.parent
 _TOPICS = json.loads((_ROOT / "topics" / "rotation.json").read_text())["categories"]
 
 
+def _normalize_slug(text: str) -> str:
+    for chars, replacement in [("áàãâä","a"),("éèêë","e"),("íìîï","i"),("óòõôö","o"),("úùûü","u"),("ç","c")]:
+        for ch in chars:
+            text = text.replace(ch, replacement)
+    return text.lower().strip()
+
+
 def pick_topic() -> dict:
     """
     Seleciona o tema do post por rotação semanal (2 publicações/semana).
-    TOPIC_OVERRIDE aceita o slug exato de uma categoria para forçar o tema.
+    TOPIC_OVERRIDE aceita o slug com ou sem acentos (ex: leiloes-mercado ou leilões-mercado).
     """
-    override = os.environ.get("TOPIC_OVERRIDE", "").strip()
+    override = _normalize_slug(os.environ.get("TOPIC_OVERRIDE", ""))
     if override:
         for t in _TOPICS:
-            if t["slug"] == override:
+            if _normalize_slug(t["slug"]) == override:
                 return t
         print(f"[warn] TOPIC_OVERRIDE '{override}' não encontrado, usando rotação automática.")
 
