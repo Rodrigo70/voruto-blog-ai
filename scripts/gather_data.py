@@ -261,6 +261,46 @@ def gather_rss_news(topic: dict, max_items: int = 10) -> list[dict]:
     return unique[:max_items]
 
 
+
+# ── Imagem de capa (Pexels) ───────────────────────────────────────────────────
+
+def gather_featured_image(topic: dict) -> dict | None:
+    """
+    Busca imagem de capa no Pexels (API gratuita).
+    Retorna dict com url, photographer e pexels_url, ou None se falhar.
+    """
+    api_key = os.environ.get("PEXELS_API_KEY", "")
+    if not api_key:
+        print("[Pexels] PEXELS_API_KEY não configurado, pulando imagem.")
+        return None
+
+    query = topic.get("image_query", "trading cards collectibles")
+    try:
+        resp = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": api_key},
+            params={"query": query, "per_page": 5, "orientation": "landscape"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        photos = resp.json().get("photos", [])
+        if not photos:
+            print(f"[Pexels] Nenhuma foto encontrada para '{query}'.")
+            return None
+        photo = photos[0]
+        result = {
+            "url":          photo["src"]["large2x"],
+            "photographer": photo["photographer"],
+            "pexels_url":   photo["url"],
+            "alt":          photo.get("alt", topic["name"]),
+        }
+        print(f"[Pexels] Imagem: {result['alt']} (by {result['photographer']})")
+        return result
+    except Exception as e:
+        print(f"[Pexels] Erro: {e}")
+        return None
+
+
 # ── Orquestrador ──────────────────────────────────────────────────────────────
 
 def gather_all(topic: dict) -> dict:
@@ -279,9 +319,10 @@ def gather_all(topic: dict) -> dict:
         )
 
     return {
-        "rss_articles":  gather_rss_news(topic),
-        "ebay_listings": gather_ebay_listings(topic),
-        "auction_news":  auction_news,
-        "recent_sets":   sets,
-        "exchange_rate": exchange_rate,
+        "rss_articles":   gather_rss_news(topic),
+        "ebay_listings":  gather_ebay_listings(topic),
+        "auction_news":   auction_news,
+        "recent_sets":    sets,
+        "exchange_rate":  exchange_rate,
+        "featured_image": gather_featured_image(topic),
     }

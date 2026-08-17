@@ -30,7 +30,7 @@ _REQUIRED_SECRETS = [
     ("WP_APP_PASSWORD",   "WP Admin → Usuários → voruto-blog-bot → Senhas de aplicativo"),
 ]
 
-_OPTIONAL_SECRETS = ["EBAY_APP_ID", "EBAY_CERT_ID", "POKEMON_TCG_API_KEY"]
+_OPTIONAL_SECRETS = ["EBAY_APP_ID", "EBAY_CERT_ID", "POKEMON_TCG_API_KEY", "PEXELS_API_KEY"]
 
 
 def validate_env() -> None:
@@ -240,7 +240,7 @@ def main() -> None:
     slug    = sanity_client.publish(topic, article)
 
     try:
-        result = wordpress_client.publish(topic, article, slug)
+        result = wordpress_client.publish(topic, article, slug, data.get("featured_image"))
     except Exception as wp_err:
         sanity_client.delete(slug)
         raise RuntimeError(

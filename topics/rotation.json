@@ -8,7 +8,8 @@
       "wp_category": "Lançamentos TCG",
       "ebay_query": "pokemon booster box sealed 2025",
       "cta_link": "voruto.com.br/store",
-      "cta_anchor": "nossa loja"
+      "cta_anchor": "nossa loja",
+      "image_query": "pokemon trading cards booster pack collection"
     },
     {
       "slug": "leiloes-mercado",
@@ -18,7 +19,8 @@
       "wp_category": "Leilões & Mercado",
       "ebay_query": "pokemon card PSA 10 graded charizard rare vintage",
       "cta_link": "voruto.com.br/marketplace",
-      "cta_anchor": "nosso marketplace peer-to-peer"
+      "cta_anchor": "nosso marketplace peer-to-peer",
+      "image_query": "rare vintage trading cards auction collectibles"
     },
     {
       "slug": "collabs-cultura",
@@ -28,7 +30,8 @@
       "wp_category": "Collabs & Cultura",
       "ebay_query": "pokemon card limited edition special art rare holo",
       "cta_link": "voruto.com.br/vorfamily",
-      "cta_anchor": "a comunidade VorFamily"
+      "cta_anchor": "a comunidade VorFamily",
+      "image_query": "pokemon streetwear fashion art collectible culture"
     },
     {
       "slug": "guia-colecionador",
@@ -38,7 +41,8 @@
       "wp_category": "Guia do Colecionador",
       "ebay_query": "pokemon card PSA graded collection",
       "cta_link": "voruto.com.br/vorfamily",
-      "cta_anchor": "nossa comunidade de colecionadores"
+      "cta_anchor": "nossa comunidade de colecionadores",
+      "image_query": "card collection binder storage organization hobby"
     },
     {
       "slug": "curiosidades-raridades",
@@ -48,7 +52,8 @@
       "wp_category": "Curiosidades & Raridades",
       "ebay_query": "pokemon trophy card pikachu illustrator rare error misprint vintage",
       "cta_link": "voruto.com.br/marketplace",
-      "cta_anchor": "explorar raridades no nosso marketplace"
+      "cta_anchor": "explorar raridades no nosso marketplace",
+      "image_query": "rare vintage cards collectibles graded gem mint"
     },
     {
       "slug": "mercado-global",
@@ -58,7 +63,8 @@
       "wp_category": "Mercado Global",
       "ebay_query": "pokemon card investment graded market collectible alternative asset",
       "cta_link": "voruto.com.br/marketplace",
-      "cta_anchor": "nosso marketplace"
+      "cta_anchor": "nosso marketplace",
+      "image_query": "collectibles market trading cards investment alternative assets"
     }
   ]
 }

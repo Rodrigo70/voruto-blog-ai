@@ -72,35 +72,82 @@ def _get_or_create_term(endpoint: str, name: str) -> int:
     return create.json()["id"]
 
 
-def publish(topic: dict, article: dict, slug: str) -> dict:
+def upload_featured_image(image: dict, title: str) -> int | None:
+    """
+    Baixa imagem do Pexels e faz upload para a biblioteca de mídia do WordPress.
+    Retorna o media ID ou None se falhar.
+    """
+    try:
+        img_resp = requests.get(image["url"], timeout=30)
+        img_resp.raise_for_status()
+
+        safe_title = "".join(c if c.isalnum() or c == "-" else "-" for c in title.lower()[:40])
+        filename   = f"voruto-{safe_title}.jpg"
+
+        resp = requests.post(
+            f"{WP_URL}/wp-json/wp/v2/media",
+            headers={
+                **_auth_headers(),
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type":        "image/jpeg",
+            },
+            data=img_resp.content,
+            timeout=30,
+        )
+        if not resp.ok:
+            print(f"[WordPress] Upload de imagem falhou: {resp.status_code} {resp.text[:200]}")
+            return None
+        media_id = resp.json()["id"]
+
+        # Adiciona crédito ao fotógrafo nos metadados da imagem
+        requests.post(
+            f"{WP_URL}/wp-json/wp/v2/media/{media_id}",
+            headers=_auth_headers(content_type=True),
+            json={"caption": f'Foto: <a href="{image["pexels_url"]}" target="_blank">'
+                             f'{image["photographer"]}</a> via Pexels'},
+            timeout=10,
+        )
+        print(f"[WordPress] Imagem enviada: ID {media_id} ({image['photographer']} / Pexels)")
+        return media_id
+    except Exception as e:
+        print(f"[WordPress] Erro no upload de imagem: {e}")
+        return None
+
+
+def publish(topic: dict, article: dict, slug: str, featured_image: dict | None = None) -> dict:
     """
     Cria um post publicado no WordPress.
     Retorna {"id": int, "url": str}.
     """
     import json as _json
-    cat_id  = _get_or_create_term("categories", topic["wp_category"])
-    tag_ids = [_get_or_create_term("tags", tag) for tag in article.get("tags", [])]
+    cat_id   = _get_or_create_term("categories", topic["wp_category"])
+    tag_ids  = [_get_or_create_term("tags", tag) for tag in article.get("tags", [])]
+    media_id = upload_featured_image(featured_image, article["title"]) if featured_image else None
 
     word_count   = len(article.get("content_html", "").split())
     reading_time = max(1, round(word_count / 200))
     sources_used = article.get("_sources_used", [])
 
+    payload = {
+        "title":      article["title"],
+        "content":    article["content_html"],
+        "excerpt":    article["excerpt"],
+        "status":     "publish",
+        "slug":       slug,
+        "categories": [cat_id],
+        "tags":       tag_ids,
+        "meta": {
+            "_voruto_reading_time": str(reading_time),
+            "_voruto_sources":      _json.dumps(sources_used, ensure_ascii=False),
+        },
+    }
+    if media_id:
+        payload["featured_media"] = media_id
+
     resp = requests.post(
         f"{WP_URL}/wp-json/wp/v2/posts",
         headers=_auth_headers(content_type=True),
-        json={
-            "title":      article["title"],
-            "content":    article["content_html"],
-            "excerpt":    article["excerpt"],
-            "status":     "publish",
-            "slug":       slug,
-            "categories": [cat_id],
-            "tags":       tag_ids,
-            "meta": {
-                "_voruto_reading_time": str(reading_time),
-                "_voruto_sources":      _json.dumps(sources_used, ensure_ascii=False),
-            },
-        },
+        json=payload,
         timeout=30,
     )
     if not resp.ok:
