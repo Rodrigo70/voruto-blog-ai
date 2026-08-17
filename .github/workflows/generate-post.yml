@@ -45,5 +45,6 @@ jobs:
           EBAY_APP_ID:            ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID:           ${{ secrets.EBAY_CERT_ID }}
           POKEMON_TCG_API_KEY:    ${{ secrets.POKEMON_TCG_API_KEY }}
+          WP_API_URL:             ${{ secrets.WP_API_URL }}
           TOPIC_OVERRIDE:         ${{ github.event.inputs.topic_override }}
         run: python scripts/generate_post.py
