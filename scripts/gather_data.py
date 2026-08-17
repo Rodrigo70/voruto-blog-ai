@@ -35,29 +35,60 @@ _ebay_token_cache: dict = {"token": None, "expires_at": 0.0}
 
 def gather_exchange_rate() -> dict | None:
     """
-    Busca cotação USD/BRL em tempo real via AwesomeAPI (gratuita, sem autenticação).
-    Retorna dict com bid, ask, pct_change e timestamp, ou None se falhar.
+    Busca cotação USD/BRL em tempo real.
+    Tenta AwesomeAPI primeiro; fallback para open.er-api.com (sem auth).
     """
-    try:
-        resp = requests.get(
-            "https://economia.awesomeapi.com.br/json/last/USD-BRL",
-            timeout=8,
-        )
-        resp.raise_for_status()
-        data  = resp.json().get("USDBRL", {})
-        rate  = {
-            "bid":        float(data.get("bid", 0)),
-            "ask":        float(data.get("ask", 0)),
-            "pct_change": float(data.get("pctChange", 0)),
-            "high":       float(data.get("high", 0)),
-            "low":        float(data.get("low", 0)),
-            "timestamp":  data.get("create_date", ""),
-        }
-        print(f"[Câmbio] USD/BRL: R$ {rate['bid']:.2f} ({rate['pct_change']:+.2f}% hoje)")
-        return rate
-    except Exception as e:
-        print(f"[Câmbio] Erro: {e}")
+    sources = [
+        ("AwesomeAPI", _fetch_rate_awesomeapi),
+        ("ExchangeRate-API", _fetch_rate_exchangerate),
+    ]
+    for name, fn in sources:
+        try:
+            rate = fn()
+            if rate:
+                print(f"[Câmbio/{name}] USD/BRL: R$ {rate['bid']:.2f} ({rate['pct_change']:+.2f}% hoje)")
+                return rate
+        except Exception as e:
+            print(f"[Câmbio/{name}] Erro: {e}")
+    print("[Câmbio] Todas as fontes falharam — artigo sem conversão BRL.")
+    return None
+
+
+def _fetch_rate_awesomeapi() -> dict | None:
+    resp = requests.get(
+        "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+        timeout=8,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("USDBRL", {})
+    if not data:
         return None
+    return {
+        "bid":        float(data.get("bid", 0)),
+        "ask":        float(data.get("ask", 0)),
+        "pct_change": float(data.get("pctChange", 0)),
+        "high":       float(data.get("high", 0)),
+        "low":        float(data.get("low", 0)),
+    }
+
+
+def _fetch_rate_exchangerate() -> dict | None:
+    resp = requests.get(
+        "https://open.er-api.com/v6/latest/USD",
+        timeout=8,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    brl  = float(data.get("rates", {}).get("BRL", 0))
+    if not brl:
+        return None
+    return {
+        "bid":        brl,
+        "ask":        round(brl * 1.005, 4),
+        "pct_change": 0.0,
+        "high":       brl,
+        "low":        brl,
+    }
 
 
 # ── eBay Browse API (OAuth) ───────────────────────────────────────────────────
