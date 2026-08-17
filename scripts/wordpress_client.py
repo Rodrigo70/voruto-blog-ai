@@ -6,6 +6,9 @@ import os
 import base64
 import warnings
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 WP_URL  = os.environ.get("WP_URL",  "https://voruto.com.br")
 WP_USER = os.environ.get("WP_USER", "voruto-blog-bot")
