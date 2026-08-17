@@ -58,6 +58,13 @@ def _get_or_create_term(endpoint: str, name: str) -> int:
         json={"name": name, "slug": slug},
         timeout=10,
     )
+    if create.status_code == 400:
+        body = create.json()
+        if body.get("code") == "term_exists":
+            term_id = body.get("data", {}).get("term_id")
+            if term_id:
+                print(f"[WordPress] Termo '{name}' já existe (ID {term_id}), reutilizando.")
+                return int(term_id)
     if not create.ok:
         raise RuntimeError(
             f"[WordPress] POST /{endpoint} HTTP {create.status_code}: {create.text[:300]}"
