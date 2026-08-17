@@ -10,7 +10,6 @@ import requests
 
 SANITY_PROJECT_ID = os.environ.get("SANITY_PROJECT_ID", "cuj6jfyx")
 SANITY_DATASET    = os.environ.get("SANITY_DATASET",    "production")
-SANITY_TOKEN      = os.environ["SANITY_API_TOKEN"]
 
 _API_URL = f"https://{SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/mutate/{SANITY_DATASET}"
 
@@ -31,6 +30,10 @@ def publish(topic: dict, article: dict) -> str:
     Cria ou substitui um documento blogPost no Sanity.
     Retorna o slug gerado.
     """
+    token = os.environ.get("SANITY_API_TOKEN", "")
+    if not token:
+        raise RuntimeError("[Sanity] SANITY_API_TOKEN não configurado.")
+
     slug   = _slugify(article["title"])
     doc_id = f"blogPost-{datetime.now().strftime('%Y%m%d%H%M')}"
     now    = datetime.now(timezone.utc).isoformat()
@@ -52,12 +55,13 @@ def publish(topic: dict, article: dict) -> str:
     resp = requests.post(
         _API_URL,
         headers={
-            "Authorization": f"Bearer {SANITY_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type":  "application/json",
         },
         json={"mutations": [{"createOrReplace": doc}]},
         timeout=15,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise RuntimeError(f"[Sanity] HTTP {resp.status_code}: {resp.text[:400]}")
     print(f"[Sanity] Publicado: {doc_id}  (slug: {slug})")
     return slug

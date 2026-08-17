@@ -1,6 +1,6 @@
 """
 Coleta dados externos para embasar os artigos do blog Voruto.
-Fontes: RSS feeds, eBay Browse API (OAuth), PWCC Marketplace, PokémonTCG.io
+Fontes: RSS feeds, eBay Browse API (OAuth), Google News, PokémonTCG.io, câmbio BRL/USD.
 """
 import os
 import re
@@ -28,8 +28,36 @@ _BROWSER_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-# Cache do token eBay OAuth (válido por 2h)
 _ebay_token_cache: dict = {"token": None, "expires_at": 0.0}
+
+
+# ── Câmbio BRL/USD ────────────────────────────────────────────────────────────
+
+def gather_exchange_rate() -> dict | None:
+    """
+    Busca cotação USD/BRL em tempo real via AwesomeAPI (gratuita, sem autenticação).
+    Retorna dict com bid, ask, pct_change e timestamp, ou None se falhar.
+    """
+    try:
+        resp = requests.get(
+            "https://economia.awesomeapi.com.br/json/last/USD-BRL",
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data  = resp.json().get("USDBRL", {})
+        rate  = {
+            "bid":        float(data.get("bid", 0)),
+            "ask":        float(data.get("ask", 0)),
+            "pct_change": float(data.get("pctChange", 0)),
+            "high":       float(data.get("high", 0)),
+            "low":        float(data.get("low", 0)),
+            "timestamp":  data.get("create_date", ""),
+        }
+        print(f"[Câmbio] USD/BRL: R$ {rate['bid']:.2f} ({rate['pct_change']:+.2f}% hoje)")
+        return rate
+    except Exception as e:
+        print(f"[Câmbio] Erro: {e}")
+        return None
 
 
 # ── eBay Browse API (OAuth) ───────────────────────────────────────────────────
@@ -207,6 +235,8 @@ def gather_rss_news(topic: dict, max_items: int = 10) -> list[dict]:
 def gather_all(topic: dict) -> dict:
     print(f"[gather] Coletando dados para: {topic['name']}")
 
+    exchange_rate = gather_exchange_rate()
+
     sets = []
     if topic["slug"] in ("lancamentos-tcg", "mercado-global", "curiosidades-raridades"):
         sets = gather_pokemon_sets()
@@ -222,4 +252,5 @@ def gather_all(topic: dict) -> dict:
         "ebay_listings": gather_ebay_listings(topic),
         "auction_news":  auction_news,
         "recent_sets":   sets,
+        "exchange_rate": exchange_rate,
     }
