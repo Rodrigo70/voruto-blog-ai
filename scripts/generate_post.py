@@ -238,7 +238,17 @@ def main() -> None:
     data    = gather_data.gather_all(topic)
     article = generate_article(topic, data)
     slug    = sanity_client.publish(topic, article)
-    result  = wordpress_client.publish(topic, article, slug)
+
+    try:
+        result = wordpress_client.publish(topic, article, slug)
+    except Exception as wp_err:
+        sanity_client.delete(slug)
+        raise RuntimeError(
+            f"WordPress falhou — Sanity revertido (slug: {slug}).\n"
+            f"Causa: {wp_err}\n\n"
+            "Verifique se o Cloudflare permite requisições para /wp-json/* "
+            "(Security → WAF → Custom Rules ou Page Rules → Security Level Off para /wp-json/*)."
+        ) from wp_err
 
     print(f"\n{'=' * 55}")
     print(f"  PUBLICADO COM SUCESSO")

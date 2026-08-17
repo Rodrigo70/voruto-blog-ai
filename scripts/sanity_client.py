@@ -65,3 +65,34 @@ def publish(topic: dict, article: dict) -> str:
         raise RuntimeError(f"[Sanity] HTTP {resp.status_code}: {resp.text[:400]}")
     print(f"[Sanity] Publicado: {doc_id}  (slug: {slug})")
     return slug
+
+
+def delete(slug: str) -> None:
+    """Remove documento do Sanity pelo slug (rollback em caso de falha no WordPress)."""
+    token = os.environ.get("SANITY_API_TOKEN", "")
+    if not token:
+        print("[Sanity] SANITY_API_TOKEN ausente — não foi possível fazer rollback.")
+        return
+
+    query = f'*[_type == "blogPost" && slug.current == "{slug}"][0]._id'
+    resp  = requests.get(
+        f"https://{SANITY_PROJECT_ID}.api.sanity.io/v2021-06-07/data/query/{SANITY_DATASET}",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"query": query},
+        timeout=10,
+    )
+    doc_id = resp.json().get("result") if resp.ok else None
+    if not doc_id:
+        print(f"[Sanity] Rollback: documento com slug '{slug}' não encontrado.")
+        return
+
+    del_resp = requests.post(
+        _API_URL,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={"mutations": [{"delete": {"id": doc_id}}]},
+        timeout=10,
+    )
+    if del_resp.ok:
+        print(f"[Sanity] Rollback: documento {doc_id} removido.")
+    else:
+        print(f"[Sanity] Rollback falhou: {del_resp.status_code} {del_resp.text[:200]}")
