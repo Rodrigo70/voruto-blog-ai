@@ -1,21 +1,13 @@
 """
 Publica posts no WordPress via REST API com Application Password.
-Suporta WP_API_URL para bypass do Cloudflare via IP direto do servidor.
+O bypass do Cloudflare é feito via /etc/hosts no workflow (IP direto + domínio real).
 """
 import os
 import base64
-import warnings
 import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 WP_URL  = os.environ.get("WP_URL",  "https://voruto.com.br")
 WP_USER = os.environ.get("WP_USER", "voruto-blog-bot")
-
-# Quando definido, usa este endpoint para chamadas de API (bypass Cloudflare).
-# Ex: http://69.6.213.137 — adicionar como secret WP_API_URL no GitHub.
-_WP_API_BASE = os.environ.get("WP_API_URL", "").rstrip("/") or WP_URL
 
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
@@ -28,43 +20,19 @@ def _auth_headers(content_type: bool = False) -> dict:
             "Configure em WP Admin → Usuários → voruto-blog-bot → Senhas de aplicativo."
         )
     auth = "Basic " + base64.b64encode(f"{WP_USER}:{password}".encode()).decode()
-    headers = {
-        "Authorization": auth,
-        "User-Agent":    _UA,
-        "Accept":        "application/json",
-        "Host":          "voruto.com.br",  # necessário quando usando IP direto
-    }
+    headers = {"Authorization": auth, "User-Agent": _UA, "Accept": "application/json"}
     if content_type:
         headers["Content-Type"] = "application/json"
     return headers
 
 
-def _api(path: str) -> str:
-    """Monta URL da API usando o endpoint de bypass quando disponível."""
-    return f"{_WP_API_BASE}/wp-json/wp/v2/{path}"
-
-
-def _request(method: str, path: str, **kwargs) -> requests.Response:
-    """Wrapper que desativa verificação SSL quando usando IP direto."""
-    url      = _api(path)
-    bypassing = _WP_API_BASE != WP_URL
-    if bypassing:
-        kwargs.setdefault("verify", False)
-        warnings.filterwarnings("ignore", message="Unverified HTTPS request")
-    return getattr(requests, method)(url, headers=_auth_headers(**{"content_type": "json" in kwargs.get("headers", {}).get("Content-Type", "")}), **kwargs)
-
-
 def _get_or_create_term(endpoint: str, name: str) -> int:
     """Retorna ID de uma categoria ou tag, criando se não existir."""
-    bypassing = _WP_API_BASE != WP_URL
-    verify    = False if bypassing else True
-
     resp = requests.get(
-        _api(endpoint),
+        f"{WP_URL}/wp-json/wp/v2/{endpoint}",
         headers=_auth_headers(),
         params={"search": name, "per_page": 5},
         timeout=10,
-        verify=verify,
     )
     if not resp.text.strip():
         raise RuntimeError(
@@ -85,13 +53,15 @@ def _get_or_create_term(endpoint: str, name: str) -> int:
 
     slug   = name.lower().replace(" ", "-").replace("&", "e").replace("ã", "a").replace("ç", "c")
     create = requests.post(
-        _api(endpoint),
+        f"{WP_URL}/wp-json/wp/v2/{endpoint}",
         headers=_auth_headers(content_type=True),
         json={"name": name, "slug": slug},
         timeout=10,
-        verify=verify,
     )
-    create.raise_for_status()
+    if not create.ok:
+        raise RuntimeError(
+            f"[WordPress] POST /{endpoint} HTTP {create.status_code}: {create.text[:300]}"
+        )
     return create.json()["id"]
 
 
@@ -101,12 +71,6 @@ def publish(topic: dict, article: dict, slug: str) -> dict:
     Retorna {"id": int, "url": str}.
     """
     import json as _json
-
-    bypassing = _WP_API_BASE != WP_URL
-    verify    = False if bypassing else True
-    if bypassing:
-        print(f"[WordPress] Usando bypass Cloudflare via {_WP_API_BASE}")
-
     cat_id  = _get_or_create_term("categories", topic["wp_category"])
     tag_ids = [_get_or_create_term("tags", tag) for tag in article.get("tags", [])]
 
@@ -115,7 +79,7 @@ def publish(topic: dict, article: dict, slug: str) -> dict:
     sources_used = article.get("_sources_used", [])
 
     resp = requests.post(
-        _api("posts"),
+        f"{WP_URL}/wp-json/wp/v2/posts",
         headers=_auth_headers(content_type=True),
         json={
             "title":      article["title"],
@@ -131,7 +95,6 @@ def publish(topic: dict, article: dict, slug: str) -> dict:
             },
         },
         timeout=30,
-        verify=verify,
     )
     if not resp.ok:
         raise RuntimeError(f"[WordPress] POST /posts HTTP {resp.status_code}: {resp.text[:400]}")

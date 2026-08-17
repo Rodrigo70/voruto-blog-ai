@@ -37,14 +37,16 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
+      - name: Bypass Cloudflare — resolver WordPress via IP direto
+        run: echo "69.6.213.137 voruto.com.br" | sudo tee -a /etc/hosts
+
       - name: Gerar e publicar artigo
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SANITY_API_TOKEN:  ${{ secrets.SANITY_API_TOKEN }}
-          WP_APP_PASSWORD:   ${{ secrets.WP_APP_PASSWORD }}
-          EBAY_APP_ID:            ${{ secrets.EBAY_APP_ID }}
-          EBAY_CERT_ID:           ${{ secrets.EBAY_CERT_ID }}
-          POKEMON_TCG_API_KEY:    ${{ secrets.POKEMON_TCG_API_KEY }}
-          WP_API_URL:             ${{ secrets.WP_API_URL }}
-          TOPIC_OVERRIDE:         ${{ github.event.inputs.topic_override }}
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          SANITY_API_TOKEN:    ${{ secrets.SANITY_API_TOKEN }}
+          WP_APP_PASSWORD:     ${{ secrets.WP_APP_PASSWORD }}
+          EBAY_APP_ID:         ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID:        ${{ secrets.EBAY_CERT_ID }}
+          POKEMON_TCG_API_KEY: ${{ secrets.POKEMON_TCG_API_KEY }}
+          TOPIC_OVERRIDE:      ${{ github.event.inputs.topic_override }}
         run: python scripts/generate_post.py
