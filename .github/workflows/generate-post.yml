@@ -23,6 +23,9 @@ jobs:
     name: Gerar e publicar post
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write   # para o passo "Manter agendamento ativo"
 
     steps:
       - name: Checkout
@@ -51,3 +54,11 @@ jobs:
           PEXELS_API_KEY:      ${{ secrets.PEXELS_API_KEY }}
           TOPIC_OVERRIDE:      ${{ github.event.inputs.topic_override }}
         run: python scripts/generate_post.py
+
+      # O GitHub desliga agendamentos após 60 dias sem commit no repositório (aconteceu em 19→30/10/2026).
+      # Reativar o próprio workflow a cada execução zera essa contagem.
+      - name: Manter agendamento ativo
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/generate-post.yml/enable"
