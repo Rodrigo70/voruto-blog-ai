@@ -210,15 +210,32 @@ Responda SOMENTE com JSON válido, sem markdown ao redor:
         messages=[{"role": "user", "content": user_msg}],
     )
 
-    raw = message.content[0].text.strip()
+    raw = "".join(b.text for b in message.content if getattr(b, "type", "") == "text").strip()
+    print(f"[Claude] stop_reason={message.stop_reason} · {len(raw)} caracteres")
 
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if not match:
-        raise ValueError(f"Claude não retornou JSON válido:\n{raw[:600]}")
-
-    article = json.loads(match.group())
+    article = _extract_article_json(raw)
+    if article is None:
+        raise ValueError(f"Claude não retornou JSON válido (stop_reason={message.stop_reason}):\n{raw[:600]}\n...\n{raw[-300:]}")
     article["_sources_used"] = sources_used
     return article
+
+
+def _extract_article_json(raw: str) -> "dict | None":
+    """Lê o primeiro objeto JSON com o artigo, ignorando texto ou cercas ``` antes/depois.
+    (30/10/2026: o regex guloso {.*} pegava chaves de texto após o JSON → JSONDecodeError 'Extra data'.)"""
+    decoder = json.JSONDecoder()
+    candidates = []
+    pos = raw.find("{")
+    while pos != -1:
+        try:
+            obj, end = decoder.raw_decode(raw, pos)
+            if isinstance(obj, dict):
+                candidates.append(obj)
+            pos = raw.find("{", end)
+        except json.JSONDecodeError:
+            pos = raw.find("{", pos + 1)
+    full = [c for c in candidates if c.get("title") and c.get("content_html")]
+    return max(full, key=lambda c: len(c["content_html"])) if full else None
 
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
