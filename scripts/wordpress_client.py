@@ -114,7 +114,35 @@ def upload_featured_image(image: dict, title: str) -> int | None:
         return None
 
 
-def publish(topic: dict, article: dict, slug: str, featured_image: dict | None = None) -> dict:
+def upload_cover(cover: bytes, slug: str, title: str) -> int | None:
+    """Envia a capa da marca (JPEG gerado pelo motor) para a biblioteca de mídia."""
+    try:
+        headers = _auth_headers()
+        headers["Content-Type"] = "image/jpeg"
+        headers["Content-Disposition"] = f'attachment; filename="insights-{slug[:60]}.jpg"'
+        resp = requests.post(f"{WP_URL}/wp-json/wp/v2/media", headers=headers, data=cover, timeout=60)
+        if not resp.ok:
+            print(f"[WordPress] Upload da capa falhou: {resp.status_code} {resp.text[:200]}")
+            return None
+        media_id = resp.json()["id"]
+        requests.post(f"{WP_URL}/wp-json/wp/v2/media/{media_id}", headers=_auth_headers(content_type=True),
+                      json={"alt_text": title[:200]}, timeout=20)
+        print(f"[WordPress] Capa enviada: ID {media_id}")
+        return media_id
+    except Exception as e:
+        print(f"[WordPress] Erro no upload da capa: {e}")
+        return None
+
+
+def set_featured(post_id: int, media_id: int) -> bool:
+    resp = requests.post(f"{WP_URL}/wp-json/wp/v2/posts/{post_id}", headers=_auth_headers(content_type=True),
+                         json={"featured_media": media_id}, timeout=30)
+    if not resp.ok:
+        print(f"[WordPress] Não consegui definir a capa do post {post_id}: {resp.status_code} {resp.text[:200]}")
+    return resp.ok
+
+
+def publish(topic: dict, article: dict, slug: str, featured_image: dict | None = None, cover_bytes: bytes | None = None) -> dict:
     """
     Cria um post publicado no WordPress.
     Retorna {"id": int, "url": str}.
@@ -122,7 +150,9 @@ def publish(topic: dict, article: dict, slug: str, featured_image: dict | None =
     import json as _json
     cat_id   = _get_or_create_term("categories", topic["wp_category"])
     tag_ids  = [_get_or_create_term("tags", tag) for tag in article.get("tags", [])]
-    media_id = upload_featured_image(featured_image, article["title"]) if featured_image else None
+    media_id = upload_cover(cover_bytes, slug, article["title"]) if cover_bytes else None
+    if not media_id and featured_image:
+        media_id = upload_featured_image(featured_image, article["title"])
 
     word_count   = len(article.get("content_html", "").split())
     reading_time = max(1, round(word_count / 200))

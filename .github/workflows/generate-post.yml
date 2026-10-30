@@ -10,6 +10,12 @@ on:
         description: 'Forçar tema pelo slug (ex: leiloes-mercado). Deixe vazio para rotação automática.'
         required: false
         default: ''
+      modo:
+        description: 'post = gerar e publicar um post · capas-antigas = criar capa para os posts sem imagem'
+        required: false
+        default: 'post'
+        type: choice
+        options: [post, capas-antigas]
 
 # Configurações públicas — segredos vão em Settings → Secrets and variables → Actions
 env:
@@ -53,7 +59,12 @@ jobs:
           POKEMON_TCG_API_KEY: ${{ secrets.POKEMON_TCG_API_KEY }}
           PEXELS_API_KEY:      ${{ secrets.PEXELS_API_KEY }}
           TOPIC_OVERRIDE:      ${{ github.event.inputs.topic_override }}
-        run: python scripts/generate_post.py
+        run: |
+          if [ "${{ github.event.inputs.modo }}" = "capas-antigas" ]; then
+            python scripts/backfill_covers.py
+          else
+            python scripts/generate_post.py
+          fi
 
       # O GitHub desliga agendamentos após 60 dias sem commit no repositório (aconteceu em 19→30/10/2026).
       # Reativar o próprio workflow a cada execução zera essa contagem.

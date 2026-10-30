@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import gather_data
 import sanity_client
 import wordpress_client
+import blog_media
 
 
 # ── VALIDAÇÃO DE AMBIENTE ─────────────────────────────────────────────────────
@@ -193,13 +194,20 @@ Requisitos finais:
 - Meta description SEO: máximo 155 caracteres, com palavra-chave principal
 - Tags: 6 a 8 palavras-chave relevantes (mix de head terms + long-tail)
 
+CARTAS CITADAS (imagens no post):
+- Em "cards", liste de 1 a 4 cartas reais e específicas que o artigo menciona com destaque (ex.: Charizard da Base Set). Use o nome oficial em inglês como impresso na carta ("Charizard", "Umbreon VMAX", "Pikachu Illustrator"), a coleção em inglês ("Base Set", "Evolving Skies") e o número quando souber ("4", "215").
+- A primeira carta da lista é a principal do artigo (vai para a capa).
+- No content_html, logo depois do parágrafo em que cada carta aparece pela primeira vez, insira o marcador [[CARD:n]] em uma linha própria (n = posição da carta na lista "cards", começando em 1). Um marcador por carta.
+- Se o artigo não tratar de nenhuma carta específica, use "cards": [] e não insira marcadores.
+
 Responda SOMENTE com JSON válido, sem markdown ao redor:
 {{
   "title": "...",
   "excerpt": "...",
   "content_html": "...",
   "meta_description": "...",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6"]
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6"],
+  "cards": [{{"name": "Charizard", "set": "Base Set", "number": "4"}}]
 }}"""
 
     client  = anthropic.Anthropic()
@@ -254,10 +262,21 @@ def main() -> None:
 
     data    = gather_data.gather_all(topic)
     article = generate_article(topic, data)
+
+    # Imagens: cartas citadas (figuras no texto) + capa da marca. Falha aqui nunca impede o post.
+    cover = None
+    try:
+        cards = blog_media.resolve_cards(article, data.get("exchange_rate"))
+        cover = blog_media.build_cover(article["title"], topic["wp_category"], topic["slug"], cards)
+        print(f"[Capa] gerada com {min(len(cards), 3)} carta(s).")
+    except Exception as img_err:
+        article["content_html"] = blog_media._MARKER.sub("", article.get("content_html", ""))
+        print(f"[Capa] Erro ao montar imagens (post segue sem elas): {img_err}")
+
     slug    = sanity_client.publish(topic, article)
 
     try:
-        result = wordpress_client.publish(topic, article, slug, data.get("featured_image"))
+        result = wordpress_client.publish(topic, article, slug, data.get("featured_image"), cover_bytes=cover)
     except Exception as wp_err:
         sanity_client.delete(slug)
         raise RuntimeError(
